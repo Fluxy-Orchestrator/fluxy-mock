@@ -1,0 +1,258 @@
+{
+	"info": {
+		"name": "Fluxy Mock",
+		"description": "Collection for fluxy-mock HTTP mock proxy service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "baseUrl", "value": "http://localhost:8080" },
+		{ "key": "endpointId", "value": "1" },
+		{ "key": "responseId", "value": "1" },
+		{ "key": "matcherId", "value": "1" },
+		{ "key": "postActionId", "value": "1" }
+	],
+	"item": [
+		{
+			"name": "Admin – Full Create",
+			"item": [
+				{
+					"name": "Create GET /users/{id} mock (full)",
+					"event": [{ "listen": "test", "script": { "exec": ["var json = pm.response.json();", "pm.collectionVariables.set('endpointId', json.id);", "if(json.responses && json.responses.length) pm.collectionVariables.set('responseId', json.responses[0].id);"] } }],
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Get User by ID\",\n  \"httpMethod\": \"GET\",\n  \"pathPattern\": \"/users/{id}\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Success response\",\n      \"active\": true,\n      \"httpStatus\": 200,\n      \"responseHeaders\": { \"X-Mock\": \"true\" },\n      \"bodyTemplate\": \"{\\\"id\\\": \\\"{{path.id}}\\\", \\\"name\\\": \\\"John Doe\\\", \\\"uuid\\\": \\\"{{uuid}}\\\", \\\"timestamp\\\": \\\"{{timestamp}}\\\"}\",\n      \"latencyMs\": 100,\n      \"requestMatcher\": null,\n      \"postActions\": []\n    },\n    {\n      \"description\": \"Not found response\",\n      \"active\": false,\n      \"httpStatus\": 404,\n      \"responseHeaders\": {},\n      \"bodyTemplate\": \"{\\\"error\\\": \\\"User {{path.id}} not found\\\"}\",\n      \"latencyMs\": 0,\n      \"requestMatcher\": null,\n      \"postActions\": []\n    }\n  ]\n}"
+						}
+					}
+				},
+				{
+					"name": "Create POST /orders mock (full)",
+					"event": [{ "listen": "test", "script": { "exec": ["var json = pm.response.json();", "pm.collectionVariables.set('endpointId', json.id);", "if(json.responses && json.responses.length) pm.collectionVariables.set('responseId', json.responses[0].id);"] } }],
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Create Order\",\n  \"httpMethod\": \"POST\",\n  \"pathPattern\": \"/orders\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Order created\",\n      \"active\": true,\n      \"httpStatus\": 201,\n      \"responseHeaders\": { \"Content-Type\": \"application/json\" },\n      \"bodyTemplate\": \"{\\\"orderId\\\": \\\"{{uuid}}\\\", \\\"status\\\": \\\"created\\\", \\\"timestamp\\\": \\\"{{now}}\\\"}\",\n      \"latencyMs\": 200,\n      \"requestMatcher\": {\n        \"matchBodyContains\": \"\\\"product\\\"\"\n      },\n      \"postActions\": [\n        {\n          \"delayMs\": 5000,\n          \"sqsQueueUrl\": \"http://localhost:4566/000000000000/order-events\",\n          \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"ORDER_CREATED\\\", \\\"orderId\\\": \\\"{{uuid}}\\\"}\"\n        }\n      ]\n    }\n  ]\n}"
+						}
+					}
+				},
+				{
+					"name": "Create PATCH /products/{id} mock (full)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Update Product\",\n  \"httpMethod\": \"PATCH\",\n  \"pathPattern\": \"/products/{id}\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Product updated\",\n      \"active\": true,\n      \"httpStatus\": 200,\n      \"responseHeaders\": {},\n      \"bodyTemplate\": \"{\\\"id\\\": \\\"{{path.id}}\\\", \\\"updated\\\": true, \\\"timestamp\\\": \\\"{{now}}\\\"}\",\n      \"latencyMs\": 50,\n      \"requestMatcher\": null,\n      \"postActions\": []\n    }\n  ]\n}"
+						}
+					}
+				},
+				{
+					"name": "Create DELETE /items/{id} mock (full)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Delete Item\",\n  \"httpMethod\": \"DELETE\",\n  \"pathPattern\": \"/items/{id}\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Item deleted\",\n      \"active\": true,\n      \"httpStatus\": 204,\n      \"responseHeaders\": {},\n      \"bodyTemplate\": null,\n      \"latencyMs\": 0,\n      \"requestMatcher\": null,\n      \"postActions\": []\n    }\n  ]\n}"
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin – Endpoints",
+			"item": [
+				{
+					"name": "List all endpoints",
+					"request": { "method": "GET", "url": "{{baseUrl}}/api/mock/admin/endpoints" }
+				},
+				{
+					"name": "Get endpoint by ID",
+					"request": { "method": "GET", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}" }
+				},
+				{
+					"name": "Toggle endpoint enabled/disabled",
+					"request": { "method": "PATCH", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/toggle" }
+				},
+				{
+					"name": "Delete endpoint",
+					"request": { "method": "DELETE", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}" }
+				}
+			]
+		},
+		{
+			"name": "Admin – Responses",
+			"item": [
+				{
+					"name": "Add response to endpoint",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/responses",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Error 500 response\",\n  \"active\": false,\n  \"httpStatus\": 500,\n  \"responseHeaders\": {},\n  \"bodyTemplate\": \"{\\\"error\\\": \\\"Internal Server Error\\\"}\",\n  \"latencyMs\": 0\n}"
+						}
+					}
+				},
+				{
+					"name": "List responses for endpoint",
+					"request": { "method": "GET", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/responses" }
+				},
+				{
+					"name": "Activate response",
+					"request": { "method": "PATCH", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/responses/{{responseId}}/activate" }
+				},
+				{
+					"name": "Deactivate response",
+					"request": { "method": "PATCH", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/responses/{{responseId}}/deactivate" }
+				},
+				{
+					"name": "Delete response",
+					"request": { "method": "DELETE", "url": "{{baseUrl}}/api/mock/admin/endpoints/{{endpointId}}/responses/{{responseId}}" }
+				}
+			]
+		},
+		{
+			"name": "Admin – Matchers",
+			"item": [
+				{
+					"name": "Set matcher (query param)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/responses/{{responseId}}/matchers",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"matchQueryParams\": { \"status\": \"active\" }\n}"
+						}
+					}
+				},
+				{
+					"name": "Set matcher (header)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/responses/{{responseId}}/matchers",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"matchHeaders\": { \"X-Tenant\": \"tenant-a\" }\n}"
+						}
+					}
+				},
+				{
+					"name": "Set matcher (body contains)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/responses/{{responseId}}/matchers",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"matchBodyContains\": \"\\\"product\\\":\\\"laptop\\\"\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Set matcher (path variable)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/responses/{{responseId}}/matchers",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"matchPathVariables\": { \"id\": \"42\" }\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete matcher",
+					"request": { "method": "DELETE", "url": "{{baseUrl}}/api/mock/admin/matchers/{{matcherId}}" }
+				}
+			]
+		},
+		{
+			"name": "Admin – Post Actions",
+			"item": [
+				{
+					"name": "Add post-action (SQS with delay)",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/responses/{{responseId}}/post-actions",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"delayMs\": 3000,\n  \"sqsQueueUrl\": \"http://localhost:4566/000000000000/my-queue\",\n  \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"MOCK_TRIGGERED\\\", \\\"id\\\": \\\"{{uuid}}\\\"}\"\n}"
+						}
+					}
+				},
+				{
+					"name": "Delete post-action",
+					"request": { "method": "DELETE", "url": "{{baseUrl}}/api/mock/admin/post-actions/{{postActionId}}" }
+				}
+			]
+		},
+		{
+			"name": "Proxy – Mock Active",
+			"item": [
+				{
+					"name": "GET /fluxy/mock/users/123",
+					"request": { "method": "GET", "url": "{{baseUrl}}/fluxy/mock/users/123" }
+				},
+				{
+					"name": "POST /fluxy/mock/orders",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/fluxy/mock/orders",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{ \"product\": \"laptop\", \"qty\": 1 }" }
+					}
+				},
+				{
+					"name": "PATCH /fluxy/mock/products/5",
+					"request": {
+						"method": "PATCH",
+						"url": "{{baseUrl}}/fluxy/mock/products/5",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{ \"price\": 99.99 }" }
+					}
+				},
+				{
+					"name": "DELETE /fluxy/mock/items/9",
+					"request": { "method": "DELETE", "url": "{{baseUrl}}/fluxy/mock/items/9" }
+				}
+			]
+		},
+		{
+			"name": "Proxy – Error HTTP",
+			"description": "Activate the 404 or 500 responses before running these",
+			"item": [
+				{
+					"name": "GET /fluxy/mock/users/999 (expect 404 if configured)",
+					"request": { "method": "GET", "url": "{{baseUrl}}/fluxy/mock/users/999" }
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Ping",
+					"request": { "method": "GET", "url": "{{baseUrl}}/api/mock/ping" }
+				},
+				{
+					"name": "Actuator Health",
+					"request": { "method": "GET", "url": "{{baseUrl}}/actuator/health" }
+				}
+			]
+		}
+	]
+}
+
