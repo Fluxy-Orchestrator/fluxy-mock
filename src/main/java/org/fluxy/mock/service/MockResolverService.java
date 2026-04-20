@@ -35,84 +35,30 @@ public class MockResolverService {
      */
     public ResponseEntity<String> resolve(String subPath, HttpServletRequest request) {
         String method = request.getMethod().toUpperCase();
-        HttpMethodEnum httpMethod;
-        try {
-            httpMethod = HttpMethodEnum.valueOf(method);
-        } catch (IllegalArgumentException e) {
+        HttpMethodEnum httpMethod = parseMethod(method);
+        if (httpMethod == null) {
             return ResponseEntity.badRequest().body("{\"error\":\"Unsupported HTTP method: " + method + "\"}");
         }
 
-        // 1. Find matching endpoint by method + path pattern
-        List<MockEndpoint> candidates = endpointRepo.findByHttpMethod(httpMethod);
-        MockEndpoint matched = null;
-        Map<String, String> pathVars = Collections.emptyMap();
+        MatchResult match = findMatchingEndpoint(httpMethod, subPath);
+        RequestData reqData = extractRequestData(request);
 
-        for (MockEndpoint ep : candidates) {
-            if (pathMatcher.match(ep.getPathPattern(), subPath)) {
-                matched = ep;
-                pathVars = pathMatcher.extractUriTemplateVariables(ep.getPathPattern(), subPath);
-                break;
-            }
+        if (match.endpoint() == null || !match.endpoint().isEnabled()) {
+            return proxyOrNotFound(match.endpoint(), method, subPath, reqData);
         }
 
-        // Collect request data for matching & proxy
-        Map<String, String> queryParams = extractQueryParams(request);
-        Map<String, Collection<String>> reqHeaders = extractHeaders(request);
-        byte[] body = readBody(request);
-        String bodyStr = body != null ? new String(body, StandardCharsets.UTF_8) : null;
+        MockResponse chosen = findMatchingResponse(match, reqData);
 
-        // 2. No endpoint found or disabled → proxy
-        if (matched == null || !matched.isEnabled()) {
-            String targetBaseUrl = matched != null ? matched.getTargetBaseUrl() : null;
-            if (targetBaseUrl == null) {
-                return ResponseEntity.status(404).body("{\"error\":\"No mock endpoint registered for " + method + " " + subPath + "\"}");
-            }
-            return feignProxy.forward(targetBaseUrl, method, subPath, queryParams, reqHeaders, body);
-        }
-
-        // 3. Find active responses and evaluate matchers
-        List<MockResponse> activeResponses = responseRepo.findByMockEndpointIdAndActiveTrue(matched.getId());
-        MockResponse chosen = null;
-        for (MockResponse resp : activeResponses) {
-            if (matchesRequest(resp, pathVars, queryParams, reqHeaders, bodyStr)) {
-                chosen = resp;
-                break;
-            }
-        }
-
-        // 4. No matching active response → proxy fallback
         if (chosen == null) {
             log.info("No active mock response matched for {} {} — proxying to real service", method, subPath);
-            return feignProxy.forward(matched.getTargetBaseUrl(), method, subPath, queryParams, reqHeaders, body);
+            return feignProxy.forward(match.endpoint().getTargetBaseUrl(), method, subPath,
+                    reqData.queryParams(), reqData.headers(), reqData.body());
         }
 
-        // 5. Apply latency
-        if (chosen.getLatencyMs() > 0) {
-            try {
-                Thread.sleep(chosen.getLatencyMs());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        // 6. Render template
-        String resolvedBody = templateEngine.resolve(chosen.getBodyTemplate(), pathVars, queryParams);
-
-        // 7. Build response
-        HttpHeaders responseHeaders = new HttpHeaders();
-        if (chosen.getResponseHeaders() != null) {
-            chosen.getResponseHeaders().forEach(responseHeaders::set);
-        }
-        if (responseHeaders.getFirst("Content-Type") == null) {
-            responseHeaders.set("Content-Type", "application/json");
-        }
-
-        // 8. Fire post-actions asynchronously
-        if (chosen.getPostActions() != null && !chosen.getPostActions().isEmpty()) {
-            Map<String, String> finalPathVars = pathVars;
-            chosen.getPostActions().forEach(action ->
-                    postActionExecutor.execute(action, finalPathVars, queryParams));
-        }
+        applyLatency(chosen);
+        String resolvedBody = templateEngine.resolve(chosen.getBodyTemplate(), match.pathVars(), reqData.queryParams());
+        HttpHeaders responseHeaders = buildResponseHeaders(chosen);
+        firePostActions(chosen, match.pathVars(), reqData.queryParams());
 
         log.info("Returning mock response (status={}) for {} {}", chosen.getHttpStatus(), method, subPath);
         return ResponseEntity.status(HttpStatusCode.valueOf(chosen.getHttpStatus()))
@@ -120,68 +66,126 @@ public class MockResolverService {
                 .body(resolvedBody);
     }
 
-    private boolean matchesRequest(MockResponse resp, Map<String, String> pathVars,
-                                    Map<String, String> queryParams,
-                                    Map<String, Collection<String>> headers, String body) {
-        MockRequestMatcher matcher = resp.getRequestMatcher();
-        if (matcher == null) return true; // no matcher = matches everything
+    // ── Resolve helpers ──────────────────────────────────────────────────────
 
-        // Check path variables
-        if (matcher.getMatchPathVariables() != null && !matcher.getMatchPathVariables().isEmpty()) {
-            for (var entry : matcher.getMatchPathVariables().entrySet()) {
-                if (!entry.getValue().equals(pathVars.get(entry.getKey()))) return false;
-            }
+    private HttpMethodEnum parseMethod(String method) {
+        try {
+            return HttpMethodEnum.valueOf(method);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
-
-        // Check query params
-        if (matcher.getMatchQueryParams() != null && !matcher.getMatchQueryParams().isEmpty()) {
-            for (var entry : matcher.getMatchQueryParams().entrySet()) {
-                if (!entry.getValue().equals(queryParams.get(entry.getKey()))) return false;
-            }
-        }
-
-        // Check headers (case-insensitive key comparison)
-        if (matcher.getMatchHeaders() != null && !matcher.getMatchHeaders().isEmpty()) {
-            Map<String, String> flatHeaders = new HashMap<>();
-            headers.forEach((k, v) -> flatHeaders.put(k.toLowerCase(), v.stream().findFirst().orElse("")));
-            for (var entry : matcher.getMatchHeaders().entrySet()) {
-                String actual = flatHeaders.get(entry.getKey().toLowerCase());
-                if (actual == null || !actual.equals(entry.getValue())) return false;
-            }
-        }
-
-        // Check body contains
-        if (matcher.getMatchBodyContains() != null && !matcher.getMatchBodyContains().isBlank()) {
-            if (body == null || !body.contains(matcher.getMatchBodyContains())) return false;
-        }
-
-        return true;
     }
 
-    private Map<String, String> extractQueryParams(HttpServletRequest request) {
-        Map<String, String> params = new HashMap<>();
-        request.getParameterMap().forEach((k, v) -> params.put(k, v.length > 0 ? v[0] : ""));
-        return params;
+    private MatchResult findMatchingEndpoint(HttpMethodEnum httpMethod, String subPath) {
+        for (MockEndpoint ep : endpointRepo.findByHttpMethod(httpMethod)) {
+            if (pathMatcher.match(ep.getPathPattern(), subPath)) {
+                Map<String, String> vars = pathMatcher.extractUriTemplateVariables(ep.getPathPattern(), subPath);
+                return new MatchResult(ep, vars);
+            }
+        }
+        return new MatchResult(null, Collections.emptyMap());
     }
 
-    private Map<String, Collection<String>> extractHeaders(HttpServletRequest request) {
+    private RequestData extractRequestData(HttpServletRequest request) {
+        Map<String, String> queryParams = new HashMap<>();
+        request.getParameterMap().forEach((k, v) -> queryParams.put(k, v.length > 0 ? v[0] : ""));
+
         Map<String, Collection<String>> headers = new HashMap<>();
         Enumeration<String> names = request.getHeaderNames();
         while (names.hasMoreElements()) {
             String name = names.nextElement();
             headers.put(name, Collections.list(request.getHeaders(name)));
         }
+
+        byte[] body;
+        try {
+            body = request.getInputStream().readAllBytes();
+        } catch (IOException e) {
+            log.warn("Failed to read request body: {}", e.getMessage());
+            body = null;
+        }
+
+        return new RequestData(queryParams, headers, body);
+    }
+
+    private ResponseEntity<String> proxyOrNotFound(MockEndpoint endpoint, String method, String subPath, RequestData reqData) {
+        String targetBaseUrl = endpoint != null ? endpoint.getTargetBaseUrl() : null;
+        if (targetBaseUrl == null) {
+            return ResponseEntity.status(404)
+                    .body("{\"error\":\"No mock endpoint registered for " + method + " " + subPath + "\"}");
+        }
+        return feignProxy.forward(targetBaseUrl, method, subPath, reqData.queryParams(), reqData.headers(), reqData.body());
+    }
+
+    private MockResponse findMatchingResponse(MatchResult match, RequestData reqData) {
+        String bodyStr = reqData.body() != null ? new String(reqData.body(), StandardCharsets.UTF_8) : null;
+        List<MockResponse> active = responseRepo.findByMockEndpointIdAndActiveTrue(match.endpoint().getId());
+
+        return active.stream()
+                .filter(resp -> matchesRequest(resp.getRequestMatcher(), match.pathVars(),
+                        reqData.queryParams(), reqData.headers(), bodyStr))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void applyLatency(MockResponse chosen) {
+        if (chosen.getLatencyMs() <= 0) return;
+        try {
+            Thread.sleep(chosen.getLatencyMs());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private HttpHeaders buildResponseHeaders(MockResponse chosen) {
+        HttpHeaders headers = new HttpHeaders();
+        if (chosen.getResponseHeaders() != null) {
+            chosen.getResponseHeaders().forEach(headers::set);
+        }
+        if (headers.getFirst("Content-Type") == null) {
+            headers.set("Content-Type", "application/json");
+        }
         return headers;
     }
 
-    private byte[] readBody(HttpServletRequest request) {
-        try {
-            return request.getInputStream().readAllBytes();
-        } catch (IOException e) {
-            log.warn("Failed to read request body: {}", e.getMessage());
-            return null;
-        }
+    private void firePostActions(MockResponse chosen, Map<String, String> pathVars, Map<String, String> queryParams) {
+        if (chosen.getPostActions() == null || chosen.getPostActions().isEmpty()) return;
+        chosen.getPostActions().forEach(action -> postActionExecutor.execute(action, pathVars, queryParams));
     }
+
+    // ── Matching logic ───────────────────────────────────────────────────────
+
+    private boolean matchesRequest(MockRequestMatcher matcher, Map<String, String> pathVars,
+                                   Map<String, String> queryParams,
+                                   Map<String, Collection<String>> headers, String body) {
+        if (matcher == null) return true;
+
+        return matchesMap(matcher.getMatchPathVariables(), pathVars)
+                && matchesMap(matcher.getMatchQueryParams(), queryParams)
+                && matchesHeaders(matcher.getMatchHeaders(), headers)
+                && matchesBodyContains(matcher.getMatchBodyContains(), body);
+    }
+
+    private boolean matchesMap(Map<String, String> expected, Map<String, String> actual) {
+        if (expected == null || expected.isEmpty()) return true;
+        return expected.entrySet().stream()
+                .allMatch(e -> e.getValue().equals(actual.get(e.getKey())));
+    }
+
+    private boolean matchesHeaders(Map<String, String> expected, Map<String, Collection<String>> actual) {
+        if (expected == null || expected.isEmpty()) return true;
+        Map<String, String> flat = new HashMap<>();
+        actual.forEach((k, v) -> flat.put(k.toLowerCase(), v.stream().findFirst().orElse("")));
+        return expected.entrySet().stream()
+                .allMatch(e -> e.getValue().equals(flat.get(e.getKey().toLowerCase())));
+    }
+
+    private boolean matchesBodyContains(String expected, String body) {
+        return expected == null || expected.isBlank() || (body != null && body.contains(expected));
+    }
+
+    // ── Records ──────────────────────────────────────────────────────────────
+
+    private record MatchResult(MockEndpoint endpoint, Map<String, String> pathVars) {}
+    private record RequestData(Map<String, String> queryParams, Map<String, Collection<String>> headers, byte[] body) {}
 }
-
-
