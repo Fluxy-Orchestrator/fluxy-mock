@@ -1,6 +1,7 @@
 services:
 
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  # LocalStack (SQS) is provided by the fluxy-demo project on port 4566.
   postgres:
     image: postgres:16
     container_name: fluxy-mock-postgres

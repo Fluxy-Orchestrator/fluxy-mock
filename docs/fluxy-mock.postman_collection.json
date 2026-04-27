@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Fluxy Mock",
-		"description": "Collection for fluxy-mock HTTP mock proxy service",
+		"description": "Collection for fluxy-mock HTTP mock proxy service.\n\nTemplate variables supported:\n- {{uuid}}, {{timestamp}}, {{now}} — built-in generators, seeded once per request and shared across all templates.\n- {{path.id}}, {{query.page}} — path/query variables.\n- {{uuid:alias}} — named binding: generates a UUID, stores it under 'alias', reusable as {{alias}} in any subsequent template of the same request (body + SQS messages).\n- {{timestamp:alias}}, {{now:alias}} — same named-binding pattern for other generators.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -37,7 +37,7 @@
 						"header": [{ "key": "Content-Type", "value": "application/json" }],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"Create Order\",\n  \"httpMethod\": \"POST\",\n  \"pathPattern\": \"/orders\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Order created\",\n      \"active\": true,\n      \"httpStatus\": 201,\n      \"responseHeaders\": { \"Content-Type\": \"application/json\" },\n      \"bodyTemplate\": \"{\\\"orderId\\\": \\\"{{uuid}}\\\", \\\"status\\\": \\\"created\\\", \\\"timestamp\\\": \\\"{{now}}\\\"}\",\n      \"latencyMs\": 200,\n      \"requestMatcher\": {\n        \"matchBodyContains\": \"\\\"product\\\"\"\n      },\n      \"postActions\": [\n        {\n          \"delayMs\": 5000,\n          \"sqsQueueUrl\": \"http://localhost:4566/000000000000/order-events\",\n          \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"ORDER_CREATED\\\", \\\"orderId\\\": \\\"{{uuid}}\\\"}\"\n        }\n      ]\n    }\n  ]\n}"
+							"raw": "{\n  \"name\": \"Create Order\",\n  \"httpMethod\": \"POST\",\n  \"pathPattern\": \"/orders\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Order created\",\n      \"active\": true,\n      \"httpStatus\": 201,\n      \"responseHeaders\": { \"Content-Type\": \"application/json\" },\n      \"bodyTemplate\": \"{\\\"orderId\\\": \\\"{{uuid:orderId}}\\\", \\\"status\\\": \\\"created\\\", \\\"timestamp\\\": \\\"{{now}}\\\"}\",\n      \"latencyMs\": 200,\n      \"requestMatcher\": {\n        \"matchBodyContains\": \"\\\"product\\\"\"\n      },\n      \"postActions\": [\n        {\n          \"delayMs\": 5000,\n          \"sqsQueueUrl\": \"http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000042/orders-events\",\n          \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"ORDER_CREATED\\\", \\\"orderId\\\": \\\"{{orderId}}\\\"}\"\n        }\n      ]\n    }\n  ]\n}"
 						}
 					}
 				},
@@ -189,7 +189,7 @@
 						"header": [{ "key": "Content-Type", "value": "application/json" }],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"delayMs\": 3000,\n  \"sqsQueueUrl\": \"http://localhost:4566/000000000000/my-queue\",\n  \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"MOCK_TRIGGERED\\\", \\\"id\\\": \\\"{{uuid}}\\\"}\"\n}"
+							"raw": "{\n  \"delayMs\": 3000,\n  \"sqsQueueUrl\": \"http://localhost:4566/000000000000/my-queue\",\n  \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"MOCK_TRIGGERED\\\", \\\"id\\\": \\\"{{uuid:eventId}}\\\", \\\"correlationId\\\": \\\"{{eventId}}\\\"}\"\n}"
 						}
 					}
 				},
@@ -250,6 +250,48 @@
 				{
 					"name": "Actuator Health",
 					"request": { "method": "GET", "url": "{{baseUrl}}/actuator/health" }
+				}
+			]
+		},
+		{
+			"name": "Named Variables – Examples",
+			"description": "Examples illustrating the {{generator:alias}} named binding feature.\nA named variable is generated once and shared across the body template and all sqsMessageTemplates of the same request.",
+			"item": [
+				{
+					"name": "Create Order – shared orderId (body + SQS)",
+					"event": [{ "listen": "test", "script": { "exec": ["var json = pm.response.json();", "pm.collectionVariables.set('endpointId', json.id);", "if(json.responses && json.responses.length) pm.collectionVariables.set('responseId', json.responses[0].id);"] } }],
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Create Order (named vars)\",\n  \"httpMethod\": \"POST\",\n  \"pathPattern\": \"/orders/named\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Order created — orderId shared between body and SQS\",\n      \"active\": true,\n      \"httpStatus\": 201,\n      \"responseHeaders\": { \"Content-Type\": \"application/json\" },\n      \"bodyTemplate\": \"{\\\"orderId\\\": \\\"{{uuid:orderId}}\\\", \\\"status\\\": \\\"created\\\", \\\"at\\\": \\\"{{now}}\\\"}\",\n      \"latencyMs\": 100,\n      \"requestMatcher\": null,\n      \"postActions\": [\n        {\n          \"delayMs\": 2000,\n          \"sqsQueueUrl\": \"http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000042/orders-events\",\n          \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"ORDER_CREATED\\\", \\\"orderId\\\": \\\"{{orderId}}\\\", \\\"at\\\": \\\"{{now}}\\\"}\"\n        }\n      ]\n    }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
+				},
+				{
+					"name": "Invoke POST /orders/named",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/fluxy/mock/orders/named",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": { "mode": "raw", "raw": "{ \"product\": \"laptop\", \"qty\": 1 }" }
+					}
+				},
+				{
+					"name": "Create Order – two independent UUIDs",
+					"request": {
+						"method": "POST",
+						"url": "{{baseUrl}}/api/mock/admin/full",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Create Order (two UUIDs)\",\n  \"httpMethod\": \"POST\",\n  \"pathPattern\": \"/orders/multi-id\",\n  \"targetBaseUrl\": \"https://jsonplaceholder.typicode.com\",\n  \"enabled\": true,\n  \"responses\": [\n    {\n      \"description\": \"Response with two independent named UUIDs\",\n      \"active\": true,\n      \"httpStatus\": 201,\n      \"responseHeaders\": { \"Content-Type\": \"application/json\" },\n      \"bodyTemplate\": \"{\\\"orderId\\\": \\\"{{uuid:orderId}}\\\", \\\"traceId\\\": \\\"{{uuid:traceId}}\\\", \\\"status\\\": \\\"created\\\"}\",\n      \"latencyMs\": 0,\n      \"requestMatcher\": null,\n      \"postActions\": [\n        {\n          \"delayMs\": 1000,\n          \"sqsQueueUrl\": \"http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000042/orders-events\",\n          \"sqsMessageTemplate\": \"{\\\"event\\\": \\\"ORDER_CREATED\\\", \\\"orderId\\\": \\\"{{orderId}}\\\", \\\"traceId\\\": \\\"{{traceId}}\\\"}\"\n        }\n      ]\n    }\n  ]\n}",
+							"options": { "raw": { "language": "json" } }
+						}
+					}
 				}
 			]
 		}

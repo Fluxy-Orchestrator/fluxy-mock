@@ -4,7 +4,8 @@ import io.awspring.cloud.sqs.listener.acknowledgement.handler.AcknowledgementMod
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import java.net.URI;
@@ -12,13 +13,19 @@ import java.net.URI;
 public class AwsSqsConfig {
     @Value("${app.aws.region}")
     private String region;
+    @Value("${app.aws.access-key}")
+    private String accessKey;
+    @Value("${app.aws.secret-key}")
+    private String secretKey;
     @Value("${app.aws.sqs.endpoint:#{null}}")
     private String endpoint;
     @Bean
     public SqsAsyncClient sqsAsyncClient() {
+        var credentials = StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKey, secretKey));
         var builder = SqsAsyncClient.builder()
                 .region(Region.of(region))
-                .credentialsProvider(DefaultCredentialsProvider.create());
+                .credentialsProvider(credentials);
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
         }

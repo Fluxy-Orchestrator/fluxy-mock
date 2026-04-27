@@ -158,13 +158,13 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 201,
-      "bodyTemplate": "{\"orderId\": \"{{uuid}}\", \"status\": \"created\"}",
+      "bodyTemplate": "{\"orderId\": \"{{uuid:orderId}}\", \"status\": \"created\", \"timestamp\": \"{{now}}\"}",
       "latencyMs": 200,
       "requestMatcher": { "matchBodyContains": "\"product\"" },
       "postActions": [{
         "delayMs": 5000,
         "sqsQueueUrl": "http://localhost:4566/000000000000/order-events",
-        "sqsMessageTemplate": "{\"event\": \"ORDER_CREATED\", \"orderId\": \"{{uuid}}\"}"
+        "sqsMessageTemplate": "{\"event\": \"ORDER_CREATED\", \"orderId\": \"{{orderId}}\"}"
       }]
     }]
   }'
@@ -172,9 +172,12 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
 curl -X POST http://localhost:8080/fluxy/mock/orders \
   -H "Content-Type: application/json" \
   -d '{"product": "laptop", "qty": 1}'
-# {"orderId": "a1b2c3d4-...", "status": "created"}
-# → 5 seg después se envía mensaje SQS
+# {"orderId": "a1b2c3d4-...", "status": "created", "timestamp": "2026-04-27T..."}
+# → 5 seg después se envía mensaje SQS con el MISMO orderId: a1b2c3d4-...
 ```
+
+> `{{uuid:orderId}}` genera el UUID la primera vez y lo guarda como `orderId`.
+> El `sqsMessageTemplate` usa `{{orderId}}` para recuperar el mismo valor del contexto compartido.
 
 ### PATCH
 
@@ -248,12 +251,40 @@ curl http://localhost:8080/fluxy/mock/unstable/1
 | `{{path.orderId}}` | Otra variable del path | `abc-123` |
 | `{{query.page}}` | Query param `?page=2` | `2` |
 | `{{query.status}}` | Query param `?status=active` | `active` |
-| `{{uuid}}` | UUID v4 generado al momento | `a1b2c3d4-e5f6-...` |
-| `{{timestamp}}` | Epoch millis actual | `1713528000000` |
-| `{{now}}` | ISO-8601 timestamp actual | `2026-04-19T12:00:00Z` |
+| `{{uuid}}` | UUID v4 fijo para el request | `a1b2c3d4-e5f6-...` |
+| `{{timestamp}}` | Epoch millis fijo para el request | `1713528000000` |
+| `{{now}}` | ISO-8601 timestamp fijo para el request | `2026-04-19T12:00:00Z` |
 | `{{id}}` | Shortcut para `{{path.id}}` | `42` |
 
 Las variables del path tienen prioridad sobre las de query params en caso de colisión de nombres.
+
+> **Nota:** `{{uuid}}`, `{{timestamp}}` y `{{now}}` se generan **una sola vez por request** y se comparten entre el body template y todos los templates de post-acciones. Así todos los templates de un mismo request siempre reciben el mismo valor.
+
+### Variables nombradas — `{{generator:alias}}`
+
+Cuando necesitas **múltiples valores generados distintos** y reutilizarlos en varios lugares del mismo request (por ejemplo, el mismo `orderId` en el body HTTP y en el mensaje SQS), usa la sintaxis `{{generator:alias}}`.
+
+| Sintaxis | Comportamiento |
+|---|---|
+| `{{uuid:orderId}}` | Genera un UUID, lo guarda bajo el nombre `orderId` y lo retorna |
+| `{{uuid:itemId}}` | Genera **otro** UUID independiente, guardado como `itemId` |
+| `{{orderId}}` | Reutiliza el valor ya generado con alias `orderId` |
+| `{{timestamp:ts}}` | Genera un epoch-millis y lo guarda como `ts` |
+| `{{now:eventTime}}` | Genera un ISO-8601 y lo guarda como `eventTime` |
+
+**Reglas:**
+- Si el alias **no existe** aún en el contexto → genera el valor y lo almacena.
+- Si el alias **ya existe** → devuelve el valor cacheado sin generar uno nuevo.
+- El contexto es compartido entre el body template y todos los `sqsMessageTemplate` del mismo request.
+
+**Ejemplo — `orderId` consistente entre HTTP body y SQS:**
+
+```json
+"bodyTemplate":       "{\"orderId\": \"{{uuid:orderId}}\", \"status\": \"created\"}",
+"sqsMessageTemplate": "{\"event\": \"ORDER_CREATED\", \"orderId\": \"{{orderId}}\"}"
+```
+
+Ambos templates producirán el **mismo** UUID para `orderId`.
 
 ## Request Matchers
 

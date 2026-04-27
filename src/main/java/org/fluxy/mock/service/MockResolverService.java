@@ -56,9 +56,11 @@ public class MockResolverService {
         }
 
         applyLatency(chosen);
-        String resolvedBody = templateEngine.resolve(chosen.getBodyTemplate(), match.pathVars(), reqData.queryParams());
+        // Build context once so all templates (body + post-actions) share the same generated values
+        Map<String, String> ctx = templateEngine.buildContext(match.pathVars(), reqData.queryParams());
+        String resolvedBody = templateEngine.resolve(chosen.getBodyTemplate(), ctx);
         HttpHeaders responseHeaders = buildResponseHeaders(chosen);
-        firePostActions(chosen, match.pathVars(), reqData.queryParams());
+        firePostActions(chosen, ctx);
 
         log.info("Returning mock response (status={}) for {} {}", chosen.getHttpStatus(), method, subPath);
         return ResponseEntity.status(HttpStatusCode.valueOf(chosen.getHttpStatus()))
@@ -148,9 +150,9 @@ public class MockResolverService {
         return headers;
     }
 
-    private void firePostActions(MockResponse chosen, Map<String, String> pathVars, Map<String, String> queryParams) {
+    private void firePostActions(MockResponse chosen, Map<String, String> ctx) {
         if (chosen.getPostActions() == null || chosen.getPostActions().isEmpty()) return;
-        chosen.getPostActions().forEach(action -> postActionExecutor.execute(action, pathVars, queryParams));
+        chosen.getPostActions().forEach(action -> postActionExecutor.execute(action, ctx));
     }
 
     // ── Matching logic ───────────────────────────────────────────────────────
