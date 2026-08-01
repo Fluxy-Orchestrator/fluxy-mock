@@ -1,6 +1,6 @@
 # Fluxy Mock
 
-Servicio intermediario de HTTP mocks configurable. Permite registrar respuestas HTTP estáticas, proxies o capturas cacheadas por endpoint y método, con soporte de templates dinámicos, latencia simulada, matchers de request y post-acciones asíncronas (SQS).
+Servicio intermediario de HTTP mocks configurable. Permite registrar respuestas HTTP estáticas, proxies o capturas cacheadas por endpoint y método, con soporte de templates dinámicos, latencia simulada, matchers de request, post-acciones asíncronas (SQS) y triggers por eventos.
 
 Ahora los mocks también pueden configurarse con `triggerType = EVENT` para reaccionar a mensajes SQS o Kafka, y publicar la respuesta en un target parametrizable (`SQS` o `KAFKA`).
 
@@ -47,15 +47,13 @@ En modo `STATIC_JSON`, si ninguna response activa hace match, el servicio respon
 
 ```bash
 # 1. Levantar PostgreSQL
-cd fluxy-mock
-docker-compose up -d
+docker compose -f fluxy-mock/docker-compose.yml up -d
 
 # 2. Compilar y ejecutar
-cd ..
 ./gradlew bootRun
 ```
 
-La aplicación arranca en `http://localhost:8080`.
+La aplicación arranca en `http://localhost:8081`.
 
 ## Interfaz gráfica
 
@@ -73,7 +71,7 @@ Abrila en `http://localhost:8081/` una vez levantado el servicio.
 ### 1. Crear un mock completo en un solo request
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Get User by ID",
@@ -107,7 +105,7 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
 
 ```bash
 # Mock activo → retorna la respuesta configurada con status 200
-curl http://localhost:8080/fluxy/mock/users/42
+curl http://localhost:8081/fluxy/mock/users/42
 
 # Respuesta:
 # {"id": "42", "name": "John Doe", "uuid": "a1b2c3d4-..."}
@@ -117,23 +115,23 @@ curl http://localhost:8080/fluxy/mock/users/42
 
 ```bash
 # Toggle del endpoint (cambia enabled a false)
-curl -X PATCH http://localhost:8080/api/mock/admin/endpoints/1/toggle
+curl -X PATCH http://localhost:8081/api/mock/admin/endpoints/1/toggle
 
 # Ahora la request va al servicio real (jsonplaceholder)
-curl http://localhost:8080/fluxy/mock/users/42
+curl http://localhost:8081/fluxy/mock/users/42
 ```
 
 ### 4. Activar otra respuesta (ej: 404)
 
 ```bash
 # Activar la respuesta de 404 (responseId = 2)
-curl -X PATCH http://localhost:8080/api/mock/admin/endpoints/1/responses/2/activate
+curl -X PATCH http://localhost:8081/api/mock/admin/endpoints/1/responses/2/activate
 
 # Re-habilitar el endpoint
-curl -X PATCH http://localhost:8080/api/mock/admin/endpoints/1/toggle
+curl -X PATCH http://localhost:8081/api/mock/admin/endpoints/1/toggle
 
 # Ahora retorna 404
-curl http://localhost:8080/fluxy/mock/users/999
+curl http://localhost:8081/fluxy/mock/users/999
 # {"error": "User 999 not found"}
 ```
 
@@ -142,7 +140,7 @@ curl http://localhost:8080/fluxy/mock/users/999
 ### GET con path variable
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Get Product",
@@ -156,14 +154,14 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     }]
   }'
 
-curl http://localhost:8080/fluxy/mock/products/77
+curl http://localhost:8081/fluxy/mock/products/77
 # {"productId": "77", "name": "Widget"}
 ```
 
 ### POST con body template y post-acción SQS
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Create Order",
@@ -184,7 +182,7 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     }]
   }'
 
-curl -X POST http://localhost:8080/fluxy/mock/orders \
+curl -X POST http://localhost:8081/fluxy/mock/orders \
   -H "Content-Type: application/json" \
   -d '{"product": "laptop", "qty": 1}'
 # {"orderId": "a1b2c3d4-...", "status": "created", "timestamp": "2026-04-27T..."}
@@ -194,7 +192,7 @@ curl -X POST http://localhost:8080/fluxy/mock/orders \
 ### Trigger por evento
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Order event",
@@ -220,7 +218,7 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
 ### PATCH
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Update Product",
@@ -234,7 +232,7 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     }]
   }'
 
-curl -X PATCH http://localhost:8080/fluxy/mock/products/5 \
+curl -X PATCH http://localhost:8081/fluxy/mock/products/5 \
   -H "Content-Type: application/json" \
   -d '{"price": 99.99}'
 # {"id": "5", "updated": true, "at": "2026-04-19T..."}
@@ -243,7 +241,7 @@ curl -X PATCH http://localhost:8080/fluxy/mock/products/5 \
 ### DELETE
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Delete Item",
@@ -256,14 +254,14 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     }]
   }'
 
-curl -X DELETE http://localhost:8080/fluxy/mock/items/9
+curl -X DELETE http://localhost:8081/fluxy/mock/items/9
 # HTTP 204 No Content
 ```
 
 ### Respuesta con error HTTP (500)
 
 ```bash
-curl -X POST http://localhost:8080/api/mock/admin/full \
+curl -X POST http://localhost:8081/api/mock/admin/full \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Failing Service",
@@ -277,7 +275,7 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
     }]
   }'
 
-curl http://localhost:8080/fluxy/mock/unstable/1
+curl http://localhost:8081/fluxy/mock/unstable/1
 # HTTP 500 → {"error": "Internal Server Error", "traceId": "..."}
 ```
 
@@ -380,7 +378,7 @@ Para modos proxy-style también podés definir `responseJsonFieldOverrides`, un 
 
 ## Colección Postman
 
-Importar `docs/fluxy-mock.postman_collection.json` en Postman. Incluye ejemplos para todos los métodos HTTP, creación completa, matchers, post-acciones y requests al proxy.
+Importar `docs/fluxy-mock.postman_collection.json` en Postman. Incluye ejemplos para todos los métodos HTTP, creación completa, matchers, post-acciones y requests al proxy. La variable `baseUrl` por defecto apunta a `http://localhost:8081`.
 
 Las variables de colección (`baseUrl`, `endpointId`, `responseId`) se actualizan automáticamente con scripts de test al ejecutar los requests de creación.
 
