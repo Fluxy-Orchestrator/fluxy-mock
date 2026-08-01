@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guía de campos - Fluxy Mock</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="help-page">
+    <header class="help-header card">
+      <p class="eyebrow">Fluxy Mock</p>
+      <h1>Guía de campos</h1>
+      <p class="subtitle">Referencia rápida de cada campo configurable con ejemplos de uso.</p>
+      <p><a href="/">Volver al editor</a></p>
+    </header>
+
+    <section class="help-nav card">
+      <h2>Índice</h2>
+      <div class="help-links">
+        <a href="#trigger-type">Trigger</a>
+        <a href="#mode">Mode</a>
+        <a href="#path-pattern">Path pattern</a>
+        <a href="#target-base-url">Target base URL</a>
+        <a href="#name">Nombre</a>
+        <a href="#enabled">Enabled</a>
+        <a href="#response-json-field-overrides">Response overrides</a>
+        <a href="#http-method">Método HTTP</a>
+        <a href="#trigger-binding">Trigger binding</a>
+        <a href="#event-target-type">Event target type</a>
+        <a href="#event-target-destination">Event target destination</a>
+        <a href="#response-description">Response description</a>
+        <a href="#response-active">Response active</a>
+        <a href="#response-http-status">HTTP status</a>
+        <a href="#response-latency-ms">Latency</a>
+        <a href="#response-body-template">Body template</a>
+        <a href="#response-headers">Response headers</a>
+        <a href="#match-headers">Match headers</a>
+        <a href="#match-query-params">Match query params</a>
+        <a href="#match-body-contains">Match body contains</a>
+        <a href="#match-path-variables">Match path variables</a>
+        <a href="#postaction-delay-ms">Delay</a>
+        <a href="#postaction-sqs-queue-url">SQS queue URL</a>
+        <a href="#postaction-sqs-message-template">SQS message template</a>
+      </div>
+    </section>
+
+    <section id="trigger-type" class="help-section card">
+      <h2>Trigger</h2>
+      <p>Define cómo se activa el mock.</p>
+      <p><strong>HTTP</strong>: responde a requests del proxy.</p>
+      <p><strong>EVENT</strong>: responde a eventos consumidos desde una cola o bus.</p>
+      <pre>HTTP: usa el endpoint /fluxy/mock/users/42
+EVENT: consume sqs:fluxy-mock-queue y publica en SQS/KAFKA</pre>
+    </section>
+
+    <section id="mode" class="help-section card">
+      <h2>Mode</h2>
+      <p>Define qué hace la respuesta del mock.</p>
+      <pre>STATIC_JSON: devuelve un body fijo
+PROXY: reenvía la request al servicio real
+CAPTURE: guarda la primera respuesta upstream
+SECURE_CAPTURE: captura solo respuestas 2xx</pre>
+      <p>Ejemplo: usar <code>PROXY</code> cuando todavía no querés stubear el payload.</p>
+    </section>
+
+    <section id="path-pattern" class="help-section card">
+      <h2>Path pattern</h2>
+      <p>Ruta que matchea la request o evento.</p>
+      <pre>/users/{id}
+/orders/{orderId}/items/{itemId}</pre>
+      <p>Ejemplo: <code>/users/{id}</code> permite usar <code>{{path.id}}</code> en el template.</p>
+    </section>
+
+    <section id="target-base-url" class="help-section card">
+      <h2>Target base URL</h2>
+      <p>Base URL del servicio real cuando el mock actúa como proxy o captura.</p>
+      <pre>https://api.example.com
+http://localhost:3000</pre>
+      <p>Ejemplo: en modo <code>PROXY</code>, la request se reenvía a esta URL.</p>
+    </section>
+
+    <section id="name" class="help-section card">
+      <h2>Nombre</h2>
+      <p>Etiqueta visible en la lista de mocks.</p>
+      <p>Ejemplo: <code>Get User by ID</code>, <code>Create Order</code>.</p>
+    </section>
+
+    <section id="enabled" class="help-section card">
+      <h2>Enabled</h2>
+      <p>Activa o desactiva el mock sin borrarlo.</p>
+      <p>Ejemplo: desactivarlo para dejar pasar tráfico real mientras ajustás respuestas.</p>
+    </section>
+
+    <section id="response-json-field-overrides" class="help-section card">
+      <h2>Response JSON field overrides</h2>
+      <p>Permite sobrescribir campos del JSON de respuesta con templates.</p>
+      <pre>{"user.status": "\"active\""}
+{"meta.traceId": "{{uuid}}"}</pre>
+      <p>Ejemplo: cambiar solo <code>user.status</code> sin reescribir todo el body.</p>
+    </section>
+
+    <section id="http-method" class="help-section card">
+      <h2>Método HTTP</h2>
+      <p>Solo aplica cuando el trigger es <code>HTTP</code>.</p>
+      <pre>GET: lectura
+POST: alta
+PATCH: actualización parcial
+DELETE: eliminación</pre>
+      <p>Ejemplo: <code>GET /users/{id}</code> para consultas y <code>POST /orders</code> para creación.</p>
+    </section>
+
+    <section id="trigger-binding" class="help-section card">
+      <h2>Trigger binding</h2>
+      <p>Origen del evento cuando el trigger es <code>EVENT</code>.</p>
+      <p>Ejemplo: <code>sqs:fluxy-mock-queue</code> o <code>kafka:orders</code>.</p>
+    </section>
+
+    <section id="event-target-type" class="help-section card">
+      <h2>Event target type</h2>
+      <p>Destino donde se publica la respuesta del evento.</p>
+      <pre>SQS: encola un mensaje
+KAFKA: publica en un topic</pre>
+    </section>
+
+    <section id="event-target-destination" class="help-section card">
+      <h2>Event target destination</h2>
+      <p>Nombre o URL del destino según el tipo elegido.</p>
+      <p>Ejemplo SQS: <code>http://localhost:4566/000000000000/orders-events</code></p>
+      <p>Ejemplo KAFKA: <code>orders-events</code></p>
+    </section>
+
+    <section id="response-description" class="help-section card">
+      <h2>Response description</h2>
+      <p>Descripción opcional de la respuesta.</p>
+      <p>Ejemplo: <code>Success response</code>, <code>Not found</code>.</p>
+    </section>
+
+    <section id="response-active" class="help-section card">
+      <h2>Response active</h2>
+      <p>Marca si esa response compite para responder la request.</p>
+      <p>Ejemplo: dejar activa solo la variante 200 y desactivar la 404 temporalmente.</p>
+    </section>
+
+    <section id="response-http-status" class="help-section card">
+      <h2>HTTP status</h2>
+      <p>Código devuelto por la response.</p>
+      <pre>200 OK
+201 Created
+404 Not Found
+500 Internal Server Error</pre>
+    </section>
+
+    <section id="response-latency-ms" class="help-section card">
+      <h2>Latency (ms)</h2>
+      <p>Retraso artificial antes de responder.</p>
+      <p>Ejemplo: <code>250</code> simula una API lenta.</p>
+    </section>
+
+    <section id="response-body-template" class="help-section card">
+      <h2>Body template</h2>
+      <p>Template de la respuesta.</p>
+      <pre>{"id":"{{path.id}}","name":"John Doe"}
+{"event":"ORDER_CREATED","orderId":"{{uuid:orderId}}"}</pre>
+      <p>Ejemplo: usar <code>{{path.id}}</code> para reutilizar variables del path.</p>
+    </section>
+
+    <section id="response-headers" class="help-section card">
+      <h2>Response headers</h2>
+      <p>Headers HTTP que acompañan la respuesta.</p>
+      <pre>{"X-Mock":"true","Cache-Control":"no-store"}</pre>
+    </section>
+
+    <section id="match-headers" class="help-section card">
+      <h2>Match headers</h2>
+      <p>La response solo se usa si la request trae esos headers.</p>
+      <pre>{"x-request-id":"123"}</pre>
+    </section>
+
+    <section id="match-query-params" class="help-section card">
+      <h2>Match query params</h2>
+      <p>Valida parámetros de query exactos.</p>
+      <pre>{"page":"2","status":"active"}</pre>
+    </section>
+
+    <section id="match-body-contains" class="help-section card">
+      <h2>Match body contains</h2>
+      <p>Busca un fragmento dentro del body entrante.</p>
+      <p>Ejemplo: <code>"product"</code> para detectar pedidos que incluyan ese campo.</p>
+    </section>
+
+    <section id="match-path-variables" class="help-section card">
+      <h2>Match path variables</h2>
+      <p>Exige valores concretos para variables del path.</p>
+      <pre>{"id":"42"}</pre>
+    </section>
+
+    <section id="postaction-delay-ms" class="help-section card">
+      <h2>Delay</h2>
+      <p>Espera antes de ejecutar la post-action.</p>
+      <p>Ejemplo: <code>5000</code> para disparar la acción 5 segundos después de responder.</p>
+    </section>
+
+    <section id="postaction-sqs-queue-url" class="help-section card">
+      <h2>SQS queue URL</h2>
+      <p>Destino de la post-action cuando publica en SQS.</p>
+      <p>Ejemplo: <code>http://localhost:4566/000000000000/order-events</code></p>
+    </section>
+
+    <section id="postaction-sqs-message-template" class="help-section card">
+      <h2>SQS message template</h2>
+      <p>Template del mensaje enviado a la cola.</p>
+      <pre>{"event":"ORDER_CREATED","orderId":"{{orderId}}"}</pre>
+    </section>
+  </main>
+</body>
+</html>

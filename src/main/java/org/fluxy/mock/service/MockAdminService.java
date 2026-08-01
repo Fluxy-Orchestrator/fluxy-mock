@@ -20,21 +20,81 @@ public class MockAdminService {
 
     @Transactional
     public MockEndpoint createFull(MockEndpointDto dto) {
-        MockEndpoint endpoint = MockEndpoint.builder()
+        validateEndpointConfig(dto);
+        MockEndpoint endpoint = buildEndpoint(dto);
+        endpoint = endpointRepo.save(endpoint);
+        replaceResponses(endpoint, dto.getResponses());
+        return endpointRepo.findById(endpoint.getId()).orElseThrow();
+    }
+
+    @Transactional
+    public MockEndpoint updateFull(Long id, MockEndpointDto dto) {
+        validateEndpointConfig(dto);
+        MockEndpoint endpoint = getEndpoint(id);
+        applyEndpointFields(endpoint, dto);
+        endpointRepo.saveAndFlush(endpoint);
+        replaceResponses(endpoint, dto.getResponses());
+        return endpointRepo.findById(id).orElseThrow();
+    }
+
+    private void validateEndpointConfig(MockEndpointDto dto) {
+        MockMode mode = dto.getMode() != null ? dto.getMode() : MockMode.STATIC_JSON;
+        MockTriggerType triggerType = dto.getTriggerType() != null ? dto.getTriggerType() : MockTriggerType.HTTP;
+
+        if (triggerType == MockTriggerType.HTTP && dto.getHttpMethod() == null) {
+            throw new IllegalArgumentException("httpMethod is required when triggerType is HTTP");
+        }
+
+        if ((mode == MockMode.PROXY || mode == MockMode.CAPTURE || mode == MockMode.SECURE_CAPTURE)
+                && (dto.getTargetBaseUrl() == null || dto.getTargetBaseUrl().isBlank())) {
+            throw new IllegalArgumentException("targetBaseUrl is required when mode is PROXY, CAPTURE, or SECURE_CAPTURE");
+        }
+
+        if (triggerType == MockTriggerType.EVENT) {
+            if (dto.getTriggerBinding() == null || dto.getTriggerBinding().isBlank()) {
+                throw new IllegalArgumentException("triggerBinding is required when triggerType is EVENT");
+            }
+            if (dto.getEventTargetType() == null) {
+                throw new IllegalArgumentException("eventTargetType is required when triggerType is EVENT");
+            }
+            if (dto.getEventTargetDestination() == null || dto.getEventTargetDestination().isBlank()) {
+                throw new IllegalArgumentException("eventTargetDestination is required when triggerType is EVENT");
+            }
+        }
+    }
+
+    private MockEndpoint buildEndpoint(MockEndpointDto dto) {
+        return MockEndpoint.builder()
                 .name(dto.getName())
-                .httpMethod(dto.getHttpMethod())
+                .httpMethod(dto.getHttpMethod() != null ? dto.getHttpMethod() : HttpMethodEnum.POST)
+                .triggerType(dto.getTriggerType() != null ? dto.getTriggerType() : MockTriggerType.HTTP)
+                .mode(dto.getMode() != null ? dto.getMode() : MockMode.STATIC_JSON)
+                .responseJsonFieldOverrides(dto.getResponseJsonFieldOverrides() != null
+                        ? dto.getResponseJsonFieldOverrides()
+                        : new LinkedHashMap<>())
                 .pathPattern(dto.getPathPattern())
+                .triggerBinding(dto.getTriggerBinding())
+                .eventTargetType(dto.getEventTargetType())
+                .eventTargetDestination(dto.getEventTargetDestination())
                 .targetBaseUrl(dto.getTargetBaseUrl())
                 .enabled(dto.isEnabled())
                 .build();
-        endpoint = endpointRepo.save(endpoint);
+    }
 
-        if (dto.getResponses() != null) {
-            for (MockResponseDto rDto : dto.getResponses()) {
-                createResponse(endpoint, rDto);
-            }
-        }
-        return endpointRepo.findById(endpoint.getId()).orElseThrow();
+    private void applyEndpointFields(MockEndpoint endpoint, MockEndpointDto dto) {
+        endpoint.setName(dto.getName());
+        endpoint.setHttpMethod(dto.getHttpMethod() != null ? dto.getHttpMethod() : HttpMethodEnum.POST);
+        endpoint.setTriggerType(dto.getTriggerType() != null ? dto.getTriggerType() : MockTriggerType.HTTP);
+        endpoint.setMode(dto.getMode() != null ? dto.getMode() : MockMode.STATIC_JSON);
+        endpoint.setResponseJsonFieldOverrides(dto.getResponseJsonFieldOverrides() != null
+                ? dto.getResponseJsonFieldOverrides()
+                : new LinkedHashMap<>());
+        endpoint.setPathPattern(dto.getPathPattern());
+        endpoint.setTriggerBinding(dto.getTriggerBinding());
+        endpoint.setEventTargetType(dto.getEventTargetType());
+        endpoint.setEventTargetDestination(dto.getEventTargetDestination());
+        endpoint.setTargetBaseUrl(dto.getTargetBaseUrl());
+        endpoint.setEnabled(dto.isEnabled());
     }
 
     public List<MockEndpoint> listEndpoints() {
@@ -66,6 +126,17 @@ public class MockAdminService {
 
     public List<MockResponse> listResponses(Long endpointId) {
         return responseRepo.findByMockEndpointId(endpointId);
+    }
+
+    private void replaceResponses(MockEndpoint endpoint, List<MockResponseDto> responseDtos) {
+        endpoint.getResponses().clear();
+        endpointRepo.saveAndFlush(endpoint);
+
+        if (responseDtos != null) {
+            for (MockResponseDto rDto : responseDtos) {
+                createResponse(endpoint, rDto);
+            }
+        }
     }
 
     @Transactional
@@ -175,5 +246,3 @@ public class MockAdminService {
         return resp;
     }
 }
-
-

@@ -20,6 +20,8 @@ import java.util.*;
 @Service
 public class FeignProxyClient {
 
+    public record ProxyResult(ResponseEntity<String> responseEntity, boolean cacheable) {}
+
     /**
      * Forward the incoming request to the real service.
      *
@@ -35,6 +37,13 @@ public class FeignProxyClient {
                                            Map<String, String> queryParams,
                                            Map<String, Collection<String>> headers,
                                            byte[] body) {
+        return forwardDetailed(targetBaseUrl, method, path, queryParams, headers, body).responseEntity();
+    }
+
+    public ProxyResult forwardDetailed(String targetBaseUrl, String method, String path,
+                                       Map<String, String> queryParams,
+                                       Map<String, Collection<String>> headers,
+                                       byte[] body) {
         String url = targetBaseUrl.replaceAll("/+$", "") + path;
 
         // Build query string
@@ -68,13 +77,15 @@ public class FeignProxyClient {
             if (response.body() != null) {
                 responseBody = new String(response.body().asInputStream().readAllBytes(), StandardCharsets.UTF_8);
             }
-            return ResponseEntity.status(HttpStatusCode.valueOf(status))
+            ResponseEntity<String> responseEntity = ResponseEntity.status(HttpStatusCode.valueOf(status))
                     .headers(responseHeaders)
                     .body(responseBody);
+            return new ProxyResult(responseEntity, true);
         } catch (IOException e) {
             log.error("Error proxying request to {}: {}", url, e.getMessage(), e);
-            return ResponseEntity.status(502).body("{\"error\":\"Bad Gateway\",\"message\":\"" + e.getMessage() + "\"}");
+            ResponseEntity<String> responseEntity = ResponseEntity.status(502)
+                    .body("{\"error\":\"Bad Gateway\",\"message\":\"" + e.getMessage() + "\"}");
+            return new ProxyResult(responseEntity, false);
         }
     }
 }
-

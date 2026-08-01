@@ -2,10 +2,10 @@ package org.fluxy.mock.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "mock_responses")
@@ -50,7 +50,7 @@ public class MockResponse {
     private MockRequestMatcher requestMatcher;
 
     @OneToMany(mappedBy = "mockResponse", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OrderBy("id ASC")
     @Builder.Default
-    private List<MockPostAction> postActions = new ArrayList<>();
+    private Set<MockPostAction> postActions = new LinkedHashSet<>();
 }
-

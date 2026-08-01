@@ -40,3 +40,7 @@ app:
     sqs:
       endpoint: http://localhost:4566
       queue-name: fluxy-mock-queue
+  kafka:
+    listener:
+      enabled: false
+    topic-name: fluxy-mock-topic

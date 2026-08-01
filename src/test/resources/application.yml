@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:fluxy_mock;MODE=PostgreSQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.H2Dialect
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+app:
+  aws:
+    region: us-east-1
+    access-key: test
+    secret-key: test
+    sqs:
+      endpoint: http://localhost:4566
+      queue-name: fluxy-mock-queue
+  kafka:
+    listener:
+      enabled: false
+    topic-name: fluxy-mock-topic

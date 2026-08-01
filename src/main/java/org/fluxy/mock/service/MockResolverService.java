@@ -25,6 +25,8 @@ public class MockResolverService {
     private final MockResponseRepository responseRepo;
     private final TemplateEngineService templateEngine;
     private final FeignProxyClient feignProxy;
+    private final MockCaptureService captureService;
+    private final MockResponseOverrideService responseOverrideService;
     private final PostActionExecutor postActionExecutor;
 
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
@@ -47,12 +49,22 @@ public class MockResolverService {
             return proxyOrNotFound(match.endpoint(), method, subPath, reqData);
         }
 
-        MockResponse chosen = findMatchingResponse(match, reqData);
+        MockMode mode = effectiveMode(match.endpoint());
+        if (mode == MockMode.PROXY) {
+            ResponseEntity<String> proxied = proxyOrNotFound(match.endpoint(), method, subPath, reqData);
+            return responseOverrideService.apply(proxied, match.endpoint().getResponseJsonFieldOverrides(),
+                    match.pathVars(), reqData.queryParams());
+        }
+        if (mode == MockMode.CAPTURE || mode == MockMode.SECURE_CAPTURE) {
+            return captureService.resolve(match.endpoint(), method, subPath,
+                    reqData.queryParams(), match.pathVars(), reqData.headers(), reqData.body(),
+                    mode == MockMode.SECURE_CAPTURE);
+        }
 
+        MockResponse chosen = findMatchingResponse(match, reqData);
         if (chosen == null) {
-            log.info("No active mock response matched for {} {} — proxying to real service", method, subPath);
-            return feignProxy.forward(match.endpoint().getTargetBaseUrl(), method, subPath,
-                    reqData.queryParams(), reqData.headers(), reqData.body());
+            return ResponseEntity.status(404)
+                    .body("{\"error\":\"No active mock response matched for " + method + " " + subPath + "\"}");
         }
 
         applyLatency(chosen);
@@ -79,7 +91,7 @@ public class MockResolverService {
     }
 
     private MatchResult findMatchingEndpoint(HttpMethodEnum httpMethod, String subPath) {
-        for (MockEndpoint ep : endpointRepo.findByHttpMethod(httpMethod)) {
+        for (MockEndpoint ep : endpointRepo.findByHttpMethodAndTriggerTypeAndEnabledTrue(httpMethod, MockTriggerType.HTTP)) {
             if (pathMatcher.match(ep.getPathPattern(), subPath)) {
                 Map<String, String> vars = pathMatcher.extractUriTemplateVariables(ep.getPathPattern(), subPath);
                 return new MatchResult(ep, vars);
@@ -108,6 +120,10 @@ public class MockResolverService {
         }
 
         return new RequestData(queryParams, headers, body);
+    }
+
+    private MockMode effectiveMode(MockEndpoint endpoint) {
+        return endpoint.getMode() != null ? endpoint.getMode() : MockMode.STATIC_JSON;
     }
 
     private ResponseEntity<String> proxyOrNotFound(MockEndpoint endpoint, String method, String subPath, RequestData reqData) {

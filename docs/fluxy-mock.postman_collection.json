@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Fluxy Mock",
-		"description": "Collection for fluxy-mock HTTP mock proxy service.\n\nTemplate variables supported:\n- {{uuid}}, {{timestamp}}, {{now}} — built-in generators, seeded once per request and shared across all templates.\n- {{path.id}}, {{query.page}} — path/query variables.\n- {{uuid:alias}} — named binding: generates a UUID, stores it under 'alias', reusable as {{alias}} in any subsequent template of the same request (body + SQS messages).\n- {{timestamp:alias}}, {{now:alias}} — same named-binding pattern for other generators.",
+		"description": "Collection for fluxy-mock HTTP mock proxy service.\n\nTemplate variables supported:\n- {{uuid}}, {{timestamp}}, {{now}} — built-in generators, seeded once per request and shared across all templates.\n- {{path.id}}, {{query.page}} — path/query variables.\n- {{uuid:alias}} — named binding: generates a UUID, stores it under 'alias', reusable as {{alias}} in any subsequent template of the same request (body + SQS messages).\n- {{timestamp:alias}}, {{now:alias}} — same named-binding pattern for other generators.\n\nEndpoint creation now accepts `mode`: `STATIC_JSON` renders templates, `PROXY` forwards to `targetBaseUrl`, `CAPTURE` caches the first upstream response, and `SECURE_CAPTURE` caches only 2xx upstream responses. Proxy-style modes can also define `responseJsonFieldOverrides` to patch small JSON fields in upstream responses.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -297,4 +297,3 @@
 		}
 	]
 }
-

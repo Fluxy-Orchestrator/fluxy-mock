@@ -27,6 +27,11 @@ public class MockAdminController {
         return ResponseEntity.status(HttpStatus.CREATED).body(toView(created));
     }
 
+    @PutMapping("/endpoints/{id}")
+    public EndpointView updateEndpoint(@PathVariable Long id, @Valid @RequestBody MockEndpointDto dto) {
+        return toView(adminService.updateFull(id, dto));
+    }
+
     // ── Endpoints ────────────────────────────────────────────────────────────
 
     @GetMapping("/endpoints")
@@ -111,7 +116,9 @@ public class MockAdminController {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record EndpointView(Long id, String name, String httpMethod, String pathPattern,
-                        String targetBaseUrl, boolean enabled, List<ResponseView> responses) {}
+                        String triggerType, String triggerBinding, String eventTargetType, String eventTargetDestination,
+                        String mode, String targetBaseUrl, Map<String,String> responseJsonFieldOverrides,
+                        boolean enabled, List<ResponseView> responses) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ResponseView(Long id, String description, boolean active, int httpStatus,
@@ -131,7 +138,14 @@ public class MockAdminController {
                 ? ep.getResponses().stream().map(this::toResponseView).toList()
                 : null;
         return new EndpointView(ep.getId(), ep.getName(), ep.getHttpMethod().name(),
-                ep.getPathPattern(), ep.getTargetBaseUrl(), ep.isEnabled(), respViews);
+                ep.getPathPattern(),
+                (ep.getTriggerType() != null ? ep.getTriggerType().name() : MockTriggerType.HTTP.name()),
+                ep.getTriggerBinding(),
+                ep.getEventTargetType() != null ? ep.getEventTargetType().name() : null,
+                ep.getEventTargetDestination(),
+                (ep.getMode() != null ? ep.getMode().name() : MockMode.STATIC_JSON.name()),
+                ep.getTargetBaseUrl(), ep.getResponseJsonFieldOverrides(),
+                ep.isEnabled(), respViews);
     }
 
     private ResponseView toResponseView(MockResponse r) {
@@ -152,4 +166,3 @@ public class MockAdminController {
         return new PostActionView(a.getId(), a.getDelayMs(), a.getSqsQueueUrl(), a.getSqsMessageTemplate());
     }
 }
-

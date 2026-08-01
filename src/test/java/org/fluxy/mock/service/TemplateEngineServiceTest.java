@@ -1,5 +1,9 @@
 package org.fluxy.mock.service;
 
+import org.fluxy.mock.generator.NowTemplateValueGenerator;
+import org.fluxy.mock.generator.TemplateValueGeneratorService;
+import org.fluxy.mock.generator.TimestampTemplateValueGenerator;
+import org.fluxy.mock.generator.UuidTemplateValueGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Unit tests for {@link TemplateEngineService}.
  *
  * Covers:
- *  - Built-in generators: {{uuid}}, {{timestamp}}, {{now}}
+ *  - Generator visitors: {{uuid}}, {{timestamp}}, {{now}}
  *  - Path and query variable resolution
  *  - Shared context: same generated value across multiple resolve() calls
  *  - Named variable binding: {{generator:alias}} — generate-once / reuse
@@ -25,13 +29,18 @@ class TemplateEngineServiceTest {
 
     @BeforeEach
     void setUp() {
-        engine = new TemplateEngineService();
+        engine = new TemplateEngineService(new TemplateValueGeneratorService(
+                java.util.List.of(
+                        new UuidTemplateValueGenerator(),
+                        new TimestampTemplateValueGenerator(),
+                        new NowTemplateValueGenerator()
+                )));
     }
 
-    // ── Built-in generators ───────────────────────────────────────────────────
+    // ── Generator visitors ─────────────────────────────────────────────────────
 
     @Nested
-    @DisplayName("Built-in generators")
+    @DisplayName("Generator visitors")
     class BuiltInGenerators {
 
         @Test
@@ -207,13 +216,13 @@ class TemplateEngineServiceTest {
         }
 
         @Test
-        @DisplayName("Named alias differs from the default pre-seeded {{uuid}}")
-        void namedAliasDiffersFromDefaultUuid() {
+        @DisplayName("Existing context value takes precedence over generator alias")
+        void existingContextValueWinsOverAliasGeneration() {
             Map<String, String> ctx = engine.buildContext(null, null);
-            String defaultUuid = ctx.get("uuid");
+            ctx.put("myId", "from-context");
+
             String named = engine.resolve("{{uuid:myId}}", ctx);
-            // Named binding creates a fresh UUID independent of the pre-seeded one
-            assertThat(named).isNotEqualTo(defaultUuid);
+            assertThat(named).isEqualTo("from-context");
         }
 
         @Test
@@ -264,7 +273,7 @@ class TemplateEngineServiceTest {
         void eachCallHasIndependentContext() {
             String uuid1 = engine.resolve("{{uuid}}", null, null);
             String uuid2 = engine.resolve("{{uuid}}", null, null);
-            // Different calls → different pre-seeded UUIDs (independent contexts)
+            // Different calls → different generated UUIDs (independent contexts)
             assertThat(uuid1).isNotEqualTo(uuid2);
         }
     }
@@ -294,7 +303,7 @@ class TemplateEngineServiceTest {
             assertThat(orderIdInBody).isEqualTo(orderIdInSqs)
                     .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
-            // {{now}} was pre-seeded once → same across both templates
+            // {{now}} is cached in the shared context → same across both templates
             assertThat(atInBody).isEqualTo(atInSqs);
         }
 
@@ -308,4 +317,3 @@ class TemplateEngineServiceTest {
         }
     }
 }
-

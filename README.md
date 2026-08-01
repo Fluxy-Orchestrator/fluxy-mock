@@ -1,8 +1,11 @@
 # Fluxy Mock
 
-Servicio intermediario de HTTP mocks configurable. Permite registrar templates de respuesta HTTP para cualquier endpoint y método, con soporte de templates dinámicos, latencia simulada, matchers de request y post-acciones asíncronas (SQS).
+Servicio intermediario de HTTP mocks configurable. Permite registrar respuestas HTTP estáticas, proxies o capturas cacheadas por endpoint y método, con soporte de templates dinámicos, latencia simulada, matchers de request y post-acciones asíncronas (SQS).
 
-Si el mock está desactivado o no hay respuesta activa que haga match, el servicio actúa como proxy transparente al servicio real usando Feign.
+Ahora los mocks también pueden configurarse con `triggerType = EVENT` para reaccionar a mensajes SQS o Kafka, y publicar la respuesta en un target parametrizable (`SQS` o `KAFKA`).
+
+El `mode` del mock decide si se renderiza la respuesta estática, si se reenvía la request al servicio destino o si se captura la primera respuesta upstream para reutilizarla después. `SECURE_CAPTURE` solo persiste respuestas 2xx. Si el mock está desactivado, el servicio actúa como proxy transparente cuando tiene `targetBaseUrl`.
+En modo `STATIC_JSON`, si ninguna response activa hace match, el servicio responde `404`.
 
 ## Arquitectura
 
@@ -15,9 +18,10 @@ Si el mock está desactivado o no hay respuesta activa que haga match, el servic
                          ┌──────────▼───────────────┐
                          │   MockResolverService     │
                          │   1. AntPathMatcher match │
-                         │   2. Evaluate matchers    │
-                         │   3. Apply latency        │
-                         │   4. Render template      │
+                         │   2. Check mode           │
+                         │   3. Evaluate matchers    │
+                         │   4. Apply latency        │
+                         │   5. Render or proxy      │
                          └──────┬──────────┬────────┘
                                 │          │
                    mock found   │          │  no match / disabled
@@ -53,6 +57,17 @@ cd ..
 
 La aplicación arranca en `http://localhost:8080`.
 
+## Interfaz gráfica
+
+Además de la API de administración, la aplicación expone una UI en la raíz del sitio para:
+
+- listar mocks existentes,
+- crear mocks nuevos,
+- editar mocks completos,
+- activar/desactivar o eliminar endpoints.
+
+Abrila en `http://localhost:8081/` una vez levantado el servicio.
+
 ## Guía rápida de uso
 
 ### 1. Crear un mock completo en un solo request
@@ -63,8 +78,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Get User by ID",
     "httpMethod": "GET",
+    "mode": "STATIC_JSON",
     "pathPattern": "/users/{id}",
-    "targetBaseUrl": "https://jsonplaceholder.typicode.com",
     "enabled": true,
     "responses": [
       {
@@ -132,8 +147,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Get Product",
     "httpMethod": "GET",
+    "mode": "STATIC_JSON",
     "pathPattern": "/products/{id}",
-    "targetBaseUrl": "https://api.example.com",
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 200,
@@ -153,8 +168,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Create Order",
     "httpMethod": "POST",
+    "mode": "STATIC_JSON",
     "pathPattern": "/orders",
-    "targetBaseUrl": "https://api.example.com",
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 201,
@@ -176,6 +191,29 @@ curl -X POST http://localhost:8080/fluxy/mock/orders \
 # → 5 seg después se envía mensaje SQS con el MISMO orderId: a1b2c3d4-...
 ```
 
+### Trigger por evento
+
+```bash
+curl -X POST http://localhost:8080/api/mock/admin/full \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Order event",
+    "httpMethod": "POST",
+    "triggerType": "EVENT",
+    "triggerBinding": "sqs:fluxy-mock-queue",
+    "eventTargetType": "KAFKA",
+    "eventTargetDestination": "orders-events",
+    "mode": "STATIC_JSON",
+    "pathPattern": "/events/orders",
+    "enabled": true,
+    "responses": [{
+      "active": true,
+      "httpStatus": 200,
+      "bodyTemplate": "{\"event\":\"ORDER_CREATED\",\"orderId\":\"{{event.payload}}\"}"
+    }]
+  }'
+```
+
 > `{{uuid:orderId}}` genera el UUID la primera vez y lo guarda como `orderId`.
 > El `sqsMessageTemplate` usa `{{orderId}}` para recuperar el mismo valor del contexto compartido.
 
@@ -187,8 +225,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Update Product",
     "httpMethod": "PATCH",
+    "mode": "STATIC_JSON",
     "pathPattern": "/products/{id}",
-    "targetBaseUrl": "https://api.example.com",
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 200,
@@ -210,8 +248,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Delete Item",
     "httpMethod": "DELETE",
+    "mode": "STATIC_JSON",
     "pathPattern": "/items/{id}",
-    "targetBaseUrl": "https://api.example.com",
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 204, "bodyTemplate": null
@@ -230,8 +268,8 @@ curl -X POST http://localhost:8080/api/mock/admin/full \
   -d '{
     "name": "Failing Service",
     "httpMethod": "GET",
+    "mode": "STATIC_JSON",
     "pathPattern": "/unstable/{id}",
-    "targetBaseUrl": "https://api.example.com",
     "enabled": true,
     "responses": [{
       "active": true, "httpStatus": 500,
@@ -307,6 +345,15 @@ Cada respuesta puede tener N post-acciones que se ejecutan **después** de envia
 | `sqsQueueUrl` | `String` | URL completa de la cola SQS |
 | `sqsMessageTemplate` | `String` | Template del mensaje con soporte `{{variable}}` |
 
+## Triggers
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `triggerType` | `HTTP` \| `EVENT` | `HTTP` usa el proxy/controller actual; `EVENT` consume mensajes de listeners |
+| `triggerBinding` | `String` | Binding del origen, por ejemplo `sqs:fluxy-mock-queue` o `kafka:orders` |
+| `eventTargetType` | `SQS` \| `KAFKA` | Target al que se publica la respuesta en modo evento |
+| `eventTargetDestination` | `String` | Cola URL o topic destino para la respuesta |
+
 ## API de Administración
 
 | Método | Path | Descripción |
@@ -314,6 +361,7 @@ Cada respuesta puede tener N post-acciones que se ejecutan **después** de envia
 | `POST` | `/api/mock/admin/full` | Crear endpoint completo con responses, matchers y post-actions |
 | `GET` | `/api/mock/admin/endpoints` | Listar todos los endpoints |
 | `GET` | `/api/mock/admin/endpoints/{id}` | Obtener endpoint por ID |
+| `PUT` | `/api/mock/admin/endpoints/{id}` | Actualizar endpoint completo |
 | `PATCH` | `/api/mock/admin/endpoints/{id}/toggle` | Toggle enabled/disabled |
 | `DELETE` | `/api/mock/admin/endpoints/{id}` | Eliminar endpoint |
 | `POST` | `/api/mock/admin/endpoints/{id}/responses` | Agregar respuesta |
@@ -325,6 +373,10 @@ Cada respuesta puede tener N post-acciones que se ejecutan **después** de envia
 | `DELETE` | `/api/mock/admin/matchers/{mid}` | Eliminar matcher |
 | `POST` | `/api/mock/admin/responses/{rid}/post-actions` | Agregar post-acción |
 | `DELETE` | `/api/mock/admin/post-actions/{aid}` | Eliminar post-acción |
+
+`mode` admite `STATIC_JSON`, `PROXY`, `CAPTURE` y `SECURE_CAPTURE`. En modo `STATIC_JSON` se usa `bodyTemplate`; en modo `PROXY` se reenvía la request al `targetBaseUrl`; en modo `CAPTURE` se proxya la primera request y luego se sirve la respuesta cacheada; en modo `SECURE_CAPTURE` solo se cachean respuestas 2xx.
+
+Para modos proxy-style también podés definir `responseJsonFieldOverrides`, un mapa de rutas JSON a templates. Ejemplo: `"user.status": "\"active\""`, `"meta.traceId": "{{uuid}}"`.
 
 ## Colección Postman
 

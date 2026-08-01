@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fluxy Mock Studio</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Fluxy Mock</p>
+      <h1>Mock Studio</h1>
+      <p class="subtitle">Crear y editar mocks completos desde la interfaz web.</p>
+    </div>
+    <div class="topbar-actions">
+      <button type="button" class="secondary" id="refreshListBtn">Refrescar lista</button>
+      <button type="button" class="primary" id="newMockBtn">Nuevo mock</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar card">
+      <div class="panel-header">
+        <div>
+          <h2>Mocks</h2>
+          <p id="endpointCount">0 endpoints</p>
+        </div>
+      </div>
+      <div id="endpointList" class="endpoint-list"></div>
+    </aside>
+
+    <section class="editor card">
+      <div class="panel-header editor-header">
+        <div>
+          <h2 id="editorTitle">Nuevo mock</h2>
+          <p>Elegí primero el trigger y después completá solo la configuración que aplique.</p>
+        </div>
+        <div class="editor-actions">
+          <button type="button" class="secondary danger" id="deleteMockBtn" disabled>Eliminar</button>
+          <button type="button" class="primary" id="saveMockBtn">Guardar mock</button>
+        </div>
+      </div>
+
+      <div id="status" class="status" aria-live="polite"></div>
+
+      <form id="mockForm" novalidate>
+        <input type="hidden" id="endpointId">
+
+        <section class="form-section">
+          <h3>Configuración general</h3>
+          <p id="triggerTypeHelp" class="trigger-hint">HTTP usa la request entrante; EVENT muestra campos adicionales de mensajería.</p>
+          <div class="grid two-col">
+            <label>
+              <span class="label-head">Trigger <a class="help-link" href="/field-help.html#trigger-type" aria-label="Ver ayuda de Trigger">?</a></span>
+              <select id="triggerType">
+                <option>HTTP</option>
+                <option>EVENT</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-head">Mode <a class="help-link" href="/field-help.html#mode" aria-label="Ver ayuda de Mode">?</a></span>
+              <select id="mode">
+                <option>STATIC_JSON</option>
+                <option>PROXY</option>
+                <option>CAPTURE</option>
+                <option>SECURE_CAPTURE</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-head">Path pattern <a class="help-link" href="/field-help.html#path-pattern" aria-label="Ver ayuda de Path pattern">?</a></span>
+              <input id="pathPattern" type="text" placeholder="/users/{id}">
+            </label>
+            <label>
+              <span class="label-head">Target base URL <a class="help-link" href="/field-help.html#target-base-url" aria-label="Ver ayuda de Target base URL">?</a></span>
+              <input id="targetBaseUrl" type="text" placeholder="https://api.example.com">
+            </label>
+            <label>
+              <span class="label-head">Nombre <a class="help-link" href="/field-help.html#name" aria-label="Ver ayuda de Nombre">?</a></span>
+              <input id="name" type="text" placeholder="Get User by ID">
+            </label>
+            <label class="checkbox-line">
+              <input id="enabled" type="checkbox" checked>
+              <span class="label-head">Enabled <a class="help-link" href="/field-help.html#enabled" aria-label="Ver ayuda de Enabled">?</a></span>
+            </label>
+          </div>
+          <label>
+            <span class="label-head">Response JSON field overrides <a class="help-link" href="/field-help.html#response-json-field-overrides" aria-label="Ver ayuda de Response JSON field overrides">?</a></span>
+            <textarea id="responseJsonFieldOverrides" rows="4" placeholder='{"user.status": "\"active\""}'></textarea>
+          </label>
+        </section>
+
+        <section id="httpTriggerConfig" class="form-section">
+          <div class="section-header">
+            <div>
+              <h3>Configuración de HTTP</h3>
+              <p>Se muestra solo cuando el mock responde a requests HTTP.</p>
+            </div>
+          </div>
+          <label>
+            <span class="label-head">Método HTTP <a class="help-link" href="/field-help.html#http-method" aria-label="Ver ayuda de Método HTTP">?</a></span>
+            <select id="httpMethod">
+              <option>GET</option>
+              <option>POST</option>
+              <option>PUT</option>
+              <option>PATCH</option>
+              <option>DELETE</option>
+              <option>HEAD</option>
+              <option>OPTIONS</option>
+            </select>
+          </label>
+        </section>
+
+        <section id="eventTriggerConfig" class="form-section" hidden>
+          <div class="section-header">
+            <div>
+              <h3>Configuración de EVENT</h3>
+              <p>Se muestra solo cuando el mock se dispara por cola o bus de eventos.</p>
+            </div>
+          </div>
+          <div class="grid two-col">
+            <label>
+              <span class="label-head">Trigger binding <a class="help-link" href="/field-help.html#trigger-binding" aria-label="Ver ayuda de Trigger binding">?</a></span>
+              <input id="triggerBinding" type="text" placeholder="sqs:fluxy-mock-queue">
+            </label>
+            <label>
+              <span class="label-head">Event target type <a class="help-link" href="/field-help.html#event-target-type" aria-label="Ver ayuda de Event target type">?</a></span>
+              <select id="eventTargetType">
+                <option>SQS</option>
+                <option>KAFKA</option>
+              </select>
+            </label>
+            <label>
+              <span class="label-head">Event target destination <a class="help-link" href="/field-help.html#event-target-destination" aria-label="Ver ayuda de Event target destination">?</a></span>
+              <input id="eventTargetDestination" type="text" placeholder="orders-events">
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-header">
+            <div>
+              <h3>Responses</h3>
+              <p>Agregá una o varias respuestas para el mismo endpoint.</p>
+            </div>
+            <button type="button" class="secondary" id="addResponseBtn">Agregar response</button>
+          </div>
+          <div id="responses"></div>
+        </section>
+      </form>
+    </section>
+  </main>
+
+  <template id="responseTemplate">
+    <article class="response-card card">
+      <div class="response-header">
+        <div>
+          <h4>Response</h4>
+          <p>Respuesta activa o alternativa para el endpoint.</p>
+        </div>
+        <button type="button" class="secondary danger response-remove">Eliminar response</button>
+      </div>
+
+      <div class="grid two-col">
+        <label>
+          <span class="label-head">Description <a class="help-link" href="/field-help.html#response-description" aria-label="Ver ayuda de Description">?</a></span>
+          <input type="text" data-field="description" placeholder="Success response">
+        </label>
+        <label class="checkbox-line">
+          <input type="checkbox" data-field="active" checked>
+          <span class="label-head">Active <a class="help-link" href="/field-help.html#response-active" aria-label="Ver ayuda de Active">?</a></span>
+        </label>
+        <label>
+          <span class="label-head">HTTP status <a class="help-link" href="/field-help.html#response-http-status" aria-label="Ver ayuda de HTTP status">?</a></span>
+          <input type="number" data-field="httpStatus" min="100" max="599" step="1" value="200">
+        </label>
+        <label>
+          <span class="label-head">Latency (ms) <a class="help-link" href="/field-help.html#response-latency-ms" aria-label="Ver ayuda de Latency">?</a></span>
+          <input type="number" data-field="latencyMs" min="0" step="1" value="0">
+        </label>
+      </div>
+
+      <label>
+        <span class="label-head">Body template <a class="help-link" href="/field-help.html#response-body-template" aria-label="Ver ayuda de Body template">?</a></span>
+        <textarea data-field="bodyTemplate" rows="5" placeholder='{"id":"{{path.id}}"}'></textarea>
+      </label>
+
+      <label>
+        <span class="label-head">Response headers <a class="help-link" href="/field-help.html#response-headers" aria-label="Ver ayuda de Response headers">?</a></span>
+        <textarea data-json-field="responseHeaders" rows="4" placeholder='{"X-Mock":"true"}'></textarea>
+      </label>
+
+      <details class="nested-block" open>
+        <summary>Request matcher</summary>
+        <div class="grid two-col nested-grid">
+          <label>
+            <span class="label-head">Match headers (JSON) <a class="help-link" href="/field-help.html#match-headers" aria-label="Ver ayuda de Match headers">?</a></span>
+            <textarea data-json-field="matchHeaders" rows="3" placeholder='{"x-request-id":"123"}'></textarea>
+          </label>
+          <label>
+            <span class="label-head">Match query params (JSON) <a class="help-link" href="/field-help.html#match-query-params" aria-label="Ver ayuda de Match query params">?</a></span>
+            <textarea data-json-field="matchQueryParams" rows="3" placeholder='{"page":"2"}'></textarea>
+          </label>
+          <label>
+            <span class="label-head">Match body contains <a class="help-link" href="/field-help.html#match-body-contains" aria-label="Ver ayuda de Match body contains">?</a></span>
+            <textarea data-field="matchBodyContains" rows="3" placeholder='"product"'></textarea>
+          </label>
+          <label>
+            <span class="label-head">Match path variables (JSON) <a class="help-link" href="/field-help.html#match-path-variables" aria-label="Ver ayuda de Match path variables">?</a></span>
+            <textarea data-json-field="matchPathVariables" rows="3" placeholder='{"id":"42"}'></textarea>
+          </label>
+        </div>
+      </details>
+
+      <section class="nested-block">
+        <div class="section-header">
+          <div>
+            <h5>Post-actions</h5>
+            <p>Se ejecutan después de responder al cliente.</p>
+          </div>
+          <button type="button" class="secondary add-post-action">Agregar post-action</button>
+        </div>
+        <div class="post-actions"></div>
+      </section>
+    </article>
+  </template>
+
+  <template id="postActionTemplate">
+    <article class="post-action card">
+      <div class="post-action-header">
+        <h6>Post-action</h6>
+        <button type="button" class="secondary danger remove-post-action">Eliminar</button>
+      </div>
+      <div class="grid two-col">
+        <label>
+          <span class="label-head">Delay (ms) <a class="help-link" href="/field-help.html#postaction-delay-ms" aria-label="Ver ayuda de Delay">?</a></span>
+          <input type="number" data-field="delayMs" min="0" step="1" value="0">
+        </label>
+        <label>
+          <span class="label-head">SQS queue URL <a class="help-link" href="/field-help.html#postaction-sqs-queue-url" aria-label="Ver ayuda de SQS queue URL">?</a></span>
+          <input type="text" data-field="sqsQueueUrl" placeholder="http://localhost:4566/...">
+        </label>
+      </div>
+      <label>
+        <span class="label-head">SQS message template <a class="help-link" href="/field-help.html#postaction-sqs-message-template" aria-label="Ver ayuda de SQS message template">?</a></span>
+        <textarea data-field="sqsMessageTemplate" rows="4" placeholder='{"event":"ORDER_CREATED"}'></textarea>
+      </label>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>

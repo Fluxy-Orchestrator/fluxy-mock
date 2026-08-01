@@ -39,6 +39,9 @@ dependencies {
     implementation platform("io.awspring.cloud:spring-cloud-aws-dependencies:${springCloudAwsVersion}")
     implementation 'io.awspring.cloud:spring-cloud-aws-sqs'
 
+    // ── Kafka ────────────────────────────────────────────────────────────────
+    implementation 'org.springframework.kafka:spring-kafka'
+
     // ── Feign (standalone, sin Spring Cloud starter para compatibilidad con Boot 4) ─
     implementation 'io.github.openfeign:feign-core:13.5'
     implementation 'io.github.openfeign:feign-jackson:13.5'
@@ -53,10 +56,10 @@ dependencies {
 
     // ── Testing ──────────────────────────────────────────────────────────────
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
 }
-
